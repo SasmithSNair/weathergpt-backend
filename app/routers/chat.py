@@ -13,7 +13,6 @@ async def chat(req: ChatRequest, db: AsyncSession = Depends(get_db)):
     lat, lon = req.latitude, req.longitude
     resolved_place_name = None
 
-    # If the user named a different place ("weather in Chennai"), override GPS.
     override_place = await llm_service.extract_location_override(req.query)
     if override_place:
         try:
@@ -22,7 +21,7 @@ async def chat(req: ChatRequest, db: AsyncSession = Depends(get_db)):
                 lat, lon = matches[0]["lat"], matches[0]["lon"]
                 resolved_place_name = matches[0].get("name", override_place)
         except Exception:
-            pass  # fall back to GPS coords silently
+            pass
 
     weather_data = None
     forecast_data = None
@@ -39,16 +38,13 @@ async def chat(req: ChatRequest, db: AsyncSession = Depends(get_db)):
         if weather_data:
             alerts = weather_service.compute_basic_alerts(weather_data, forecast_data)
 
-    reply = await llm_service.generate_weather_response(
-        req.query, weather_data, req.language, alerts
-    )
+    reply = await llm_service.generate_weather_response(req.query, weather_data, alerts)
 
     db.add(ChatLog(
         query=req.query,
         response=reply,
         latitude=lat,
         longitude=lon,
-        language=req.language,
     ))
     await db.commit()
 

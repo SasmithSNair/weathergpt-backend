@@ -1,15 +1,30 @@
 import re
 import json
+import asyncio
 from google import genai
+from google.genai import errors as genai_errors
 from app.config import GEMINI_API_KEY
 
 client = genai.Client(api_key=GEMINI_API_KEY)
-MODEL_NAME = "gemini-3.5-flash"
+# Flash-Lite: cheapest GA Gemini model, built for high-volume/low-latency/
+# translation-heavy work — a good fit for a weather Q&A assistant that
+# doesn't need frontier reasoning. Swap here if you ever need more capability.
+MODEL_NAME = "gemini-3.5-flash-lite"
 
-LANG_MAP = {
-    "en": "English", "hi": "Hindi", "ta": "Tamil", "te": "Telugu",
-    "bn": "Bengali", "mr": "Marathi", "gu": "Gujarati", "kn": "Kannada",
-}
+
+async def _generate_with_retry(prompt: str, retries: int = 2, base_delay: float = 1.5):
+    """Gemini occasionally returns 503 UNAVAILABLE under high demand — this is
+    transient on Google's side, not a bug. Retry with exponential backoff
+    before giving up, instead of failing the whole request on the first blip."""
+    last_error = None
+    for attempt in range(retries + 1):
+        try:
+            return client.models.generate_content(model=MODEL_NAME, contents=prompt)
+        except genai_errors.ServerError as e:
+            last_error = e
+            if attempt < retries:
+                await asyncio.sleep(base_delay * (2 ** attempt))
+    raise last_error
 
 
 def strip_markdown(text: str) -> str:
@@ -33,7 +48,7 @@ reply with exactly: NONE
 
 User message: {query}"""
     try:
-        result = client.models.generate_content(model=MODEL_NAME, contents=prompt)
+        result = await _generate_with_retry(prompt, retries=1)  # cheap call, fail fast
         place = result.text.strip()
         if not place or place.upper() == "NONE" or len(place) > 80:
             return None
@@ -45,10 +60,8 @@ User message: {query}"""
 async def generate_weather_response(
     query: str,
     weather_data: dict | None,
-    language: str = "en",
     alerts: list[dict] | None = None,
 ) -> str:
-    lang_name = LANG_MAP.get(language, "English")
     weather_summary = "No live weather data available."
     if weather_data:
         try:
@@ -70,7 +83,11 @@ async def generate_weather_response(
 
     prompt = f"""You are WeatherGPT, a weather assistant built for the India Meteorological Department.
 Use the live data below to answer. Be concise and give practical advisories
-(agriculture, travel, safety) where relevant. Respond ONLY in {lang_name}.
+(agriculture, travel, safety) where relevant.
+
+LANGUAGE: Detect the language the user's message below is written in — it may
+be English, Hindi, Tamil, or any other Indian or world language — and reply
+in that SAME language. Do not ask which language to use; just detect and match it.
 
 IMPORTANT: Reply in plain conversational text only. Do NOT use markdown —
 no asterisks, no hashtags, no bullet points, no bold/italics. This response
@@ -80,5 +97,12 @@ Live weather data: {weather_summary}{alert_summary}
 
 User query: {query}
 """
-    result = client.models.generate_content(model=MODEL_NAME, contents=prompt)
-    return strip_markdown(result.text)
+    try:
+        result = await _generate_with_retry(prompt, retries=2)
+        return strip_markdown(result.text)
+    except genai_errors.ServerError:
+        return (
+            "SkyCast's AI is under heavy load right now and couldn't respond. "
+            "Please try again in a moment — the weather data itself is fine, "
+            "just the assistant is briefly overloaded."
+        )

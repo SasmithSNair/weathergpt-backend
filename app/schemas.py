@@ -6,7 +6,6 @@ class ChatRequest(BaseModel):
     query: str
     latitude: Optional[float] = None
     longitude: Optional[float] = None
-    language: Optional[str] = "en"
 
 
 class ChatResponse(BaseModel):
