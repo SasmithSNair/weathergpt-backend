@@ -9,7 +9,8 @@ app = FastAPI(title="WeatherGPT API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # Allows connections from anywhere
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
