@@ -1,6 +1,7 @@
 import re
 import json
 import asyncio
+from langdetect import detect, LangDetectException
 from google import genai
 from google.genai import errors as genai_errors
 from app.config import GEMINI_API_KEY
@@ -10,6 +11,31 @@ client = genai.Client(api_key=GEMINI_API_KEY)
 # translation-heavy work — a good fit for a weather Q&A assistant that
 # doesn't need frontier reasoning. Swap here if you ever need more capability.
 MODEL_NAME = "gemini-3.5-flash-lite"
+
+_LANG_NAMES = {
+    "en": "English", "hi": "Hindi", "ta": "Tamil", "te": "Telugu", "bn": "Bengali",
+    "mr": "Marathi", "gu": "Gujarati", "kn": "Kannada", "ml": "Malayalam", "pa": "Punjabi",
+    "ur": "Urdu", "fr": "French", "es": "Spanish", "de": "German", "ja": "Japanese",
+    "zh-cn": "Chinese", "ar": "Arabic", "ru": "Russian", "pt": "Portuguese",
+}
+
+
+def detect_language_name(text: str) -> str:
+    """Deterministic language detection BEFORE calling Gemini — asking the
+    model to 'detect and match' the language itself, inside the same
+    generation call, proved unreliable (it would drift to Hindi even for
+    plainly English input). Detecting separately and then hard-instructing
+    the reply language removes that guesswork entirely. Defaults to English
+    for very short text or anything detection can't confidently classify —
+    short queries ('Tokyo?') don't carry enough signal to detect from."""
+    cleaned = text.strip()
+    if len(cleaned) < 4:
+        return "English"
+    try:
+        code = detect(cleaned)
+    except LangDetectException:
+        return "English"
+    return _LANG_NAMES.get(code, "English")
 
 
 async def _generate_with_retry(prompt: str, retries: int = 2, base_delay: float = 1.5):
@@ -81,13 +107,14 @@ async def generate_weather_response(
         alert_lines = "; ".join(a["message"] for a in alerts)
         alert_summary = f"\nActive local alerts: {alert_lines}"
 
+    language_name = detect_language_name(query)
+
     prompt = f"""You are WeatherGPT, a weather assistant built for the India Meteorological Department.
 Use the live data below to answer. Be concise and give practical advisories
 (agriculture, travel, safety) where relevant.
 
-LANGUAGE: Detect the language the user's message below is written in — it may
-be English, Hindi, Tamil, or any other Indian or world language — and reply
-in that SAME language. Do not ask which language to use; just detect and match it.
+LANGUAGE: Reply ONLY in {language_name}. Do not use any other language, and
+do not mix languages.
 
 IMPORTANT: Reply in plain conversational text only. Do NOT use markdown —
 no asterisks, no hashtags, no bullet points, no bold/italics. This response
