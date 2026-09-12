@@ -87,6 +87,7 @@ async def generate_weather_response(
     query: str,
     weather_data: dict | None,
     alerts: list[dict] | None = None,
+    language_override: str | None = None,
 ) -> str:
     weather_summary = "No live weather data available."
     if weather_data:
@@ -107,7 +108,7 @@ async def generate_weather_response(
         alert_lines = "; ".join(a["message"] for a in alerts)
         alert_summary = f"\nActive local alerts: {alert_lines}"
 
-    language_name = detect_language_name(query)
+    language_name = _LANG_NAMES.get(language_override, "English") if language_override else detect_language_name(query)
 
     prompt = f"""You are WeatherGPT, a weather assistant built for the India Meteorological Department.
 Use the live data below to answer. Be concise and give practical advisories

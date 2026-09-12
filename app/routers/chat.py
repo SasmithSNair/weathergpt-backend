@@ -38,7 +38,7 @@ async def chat(req: ChatRequest, db: AsyncSession = Depends(get_db)):
         if weather_data:
             alerts = weather_service.compute_basic_alerts(weather_data, forecast_data)
 
-    reply = await llm_service.generate_weather_response(req.query, weather_data, alerts)
+    reply = await llm_service.generate_weather_response(req.query, weather_data, alerts, req.language)
 
     db.add(ChatLog(
         query=req.query,
