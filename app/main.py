@@ -5,12 +5,11 @@ from app.database import init_db
 from app.routers import weather, chat, locations
 from app.services.cache_warmer import seed_locations_if_empty, cache_warmer_loop
 
-app = FastAPI(title="WeatherGPT API")
+app = FastAPI(title="METEON API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows connections from anywhere
-    allow_credentials=True,
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -31,4 +30,4 @@ async def startup():
 
 @app.get("/")
 async def root():
-    return {"status": "WeatherGPT backend running"}
+    return {"status": "METEON backend running"}

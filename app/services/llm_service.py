@@ -16,8 +16,22 @@ _LANG_NAMES = {
     "en": "English", "hi": "Hindi", "ta": "Tamil", "te": "Telugu", "bn": "Bengali",
     "mr": "Marathi", "gu": "Gujarati", "kn": "Kannada", "ml": "Malayalam", "pa": "Punjabi",
     "ur": "Urdu", "fr": "French", "es": "Spanish", "de": "German", "ja": "Japanese",
-    "zh-cn": "Chinese", "ar": "Arabic", "ru": "Russian", "pt": "Portuguese",
+    "zh-cn": "Chinese", "ar": "Arabic", "ru": "Russian", "pt": "Portuguese", "it": "Italian",
+    "nl": "Dutch", "tr": "Turkish", "ko": "Korean", "id": "Indonesian", "vi": "Vietnamese",
+    "th": "Thai", "sw": "Swahili", "pl": "Polish",
 }
+
+
+def _language_instruction(code: str | None) -> str:
+    """Turns an ISO 639-1 code into an instruction Gemini can follow. Known
+    codes get a clean language name; anything else still gets passed
+    through by its code rather than silently collapsing to English — Gemini
+    reliably understands 'ISO 639-1 code: xx' even for languages outside our
+    curated list, so this genuinely supports any language, not just the ones
+    we've named."""
+    if code is None:
+        return "English"
+    return _LANG_NAMES.get(code, f"the language with ISO 639-1 code '{code}'")
 
 
 def detect_language_name(text: str) -> str:
@@ -35,7 +49,7 @@ def detect_language_name(text: str) -> str:
         code = detect(cleaned)
     except LangDetectException:
         return "English"
-    return _LANG_NAMES.get(code, "English")
+    return _language_instruction(code)
 
 
 async def _generate_with_retry(prompt: str, retries: int = 2, base_delay: float = 1.5):
@@ -108,9 +122,9 @@ async def generate_weather_response(
         alert_lines = "; ".join(a["message"] for a in alerts)
         alert_summary = f"\nActive local alerts: {alert_lines}"
 
-    language_name = _LANG_NAMES.get(language_override, "English") if language_override else detect_language_name(query)
+    language_name = _language_instruction(language_override) if language_override else detect_language_name(query)
 
-    prompt = f"""You are WeatherGPT, a weather assistant built for the India Meteorological Department.
+    prompt = f"""You are METEON, a weather assistant built for the India Meteorological Department.
 Use the live data below to answer. Be concise and give practical advisories
 (agriculture, travel, safety) where relevant.
 
@@ -130,7 +144,7 @@ User query: {query}
         return strip_markdown(result.text)
     except genai_errors.ServerError:
         return (
-            "SkyCast's AI is under heavy load right now and couldn't respond. "
+            "METEON's AI is under heavy load right now and couldn't respond. "
             "Please try again in a moment — the weather data itself is fine, "
             "just the assistant is briefly overloaded."
         )
