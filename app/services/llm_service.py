@@ -124,7 +124,7 @@ async def generate_weather_response(
 
     language_name = _language_instruction(language_override) if language_override else detect_language_name(query)
 
-    prompt = f"""You are METEON, a weather assistant built for the India Meteorological Department.
+    prompt = f"""You are Meteon, a weather assistant built for the India Meteorological Department.
 Use the live data below to answer. Be concise and give practical advisories
 (agriculture, travel, safety) where relevant.
 
